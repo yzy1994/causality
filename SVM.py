@@ -6,6 +6,7 @@ import torch
 import pickle
 import numpy as np
 from torch.autograd import Variable
+from Util import adjust_xe
 
 VOCAB_DIR = './data/vocab.pkl'
 MODEL_PATH = './model.pkl'
@@ -23,22 +24,33 @@ svm = SVC(kernel='linear', C=0.4)
 fopen = open(EVENT_INPUT_PATH, 'r')
 x_list = []
 y_list = []
+xe_list = []
 
 for line in fopen.readlines():
     contents = line.split('\t')
-    if len(contents)!=2:
-        continue
     category = contents[0].strip()
     event_content = contents[1].strip()
+    x_e = contents[2].strip()
     x = [word2idx[w] for w in event_content.split(' ')]
+    x_e = [int(w) for w in x_e.split(' ')]
+    x_e = adjust_xe(x_e)
+
     y = CATEGORY_DICT[category]
     x_list.append(x)
+    xe_list.append(x_e)
     y_list.append(y)
+
 event_x = np.array(x_list)
 event_y = np.array(y_list)
+xe_list = np.array(xe_list)
 event_x = torch.from_numpy(event_x)
 event_x = Variable(event_x)
-event_x = model.generate_event_embedding(event_x)
+event_xe = torch.from_numpy(xe_list)
+event_xe = torch.unsqueeze(event_xe, 1)
+event_xe = Variable(event_xe)
+
+
+event_x = model.generate_event_embedding(event_x, event_xe)
 event_x = event_x.data.numpy()
 
 x_train, x_test, y_train, y_test = train_test_split(

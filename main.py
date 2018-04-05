@@ -14,11 +14,14 @@ INPUT_DIR = './data/casual_input'
 VOCAB_DIR = './data/vocab.pkl'
 BATCH_SIZE = 64
 EPOCH_NUM = 40
-EMBEDDING_DIM = 60
-HIDDEN_DIM = 70
+EMBEDDING_DIM = 64
+HIDDEN_DIM = 75
 USE_GRU = False
 #GRU cell or LSTM cell
 DROPOUT_RATE = 0.2
+TEST_RATIO = 0.2
+ALPHA = 0.2
+LR_DECAY_RATE = 0.5
 
 
 if __name__ == '__main__':
@@ -28,7 +31,7 @@ if __name__ == '__main__':
 
     w_embedding = torch.from_numpy(np.array(vector_list))
 
-    x_tensor, y_tensor, x_test_tensor, y_test_tensor = load_data(INPUT_DIR, word2idx)
+    x_tensor, y_tensor, x_test_tensor, y_test_tensor = load_data(INPUT_DIR, word2idx, TEST_RATIO)
     train_dataset = Data.TensorDataset(data_tensor=x_tensor, target_tensor= y_tensor)
 
     loader = Data.DataLoader(
@@ -39,7 +42,7 @@ if __name__ == '__main__':
 
     model = SiameseNetwork(embedding_dims=EMBEDDING_DIM, hidden_dims=HIDDEN_DIM,
                            pretrained_embedding=w_embedding, word_nums=len(w_embedding),
-                           use_gru=USE_GRU, dropout_rate=DROPOUT_RATE)
+                           use_gru=USE_GRU, dropout_rate=DROPOUT_RATE, alpha=ALPHA)
     citerion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.02)
 
@@ -47,13 +50,15 @@ if __name__ == '__main__':
     for epoch in range(EPOCH_NUM):
         for step, (batch_x, batch_y) in enumerate(loader):
             #train
-            x1_x2 = torch.chunk(batch_x, 2, 1)
+            x1_x2 = torch.chunk(batch_x, 4, 1)
             x1 = x1_x2[0]
-            x2 = x1_x2[1]
+            x1_e = x1_x2[1]
+            x2 = x1_x2[2]
+            x2_e = x1_x2[3]
             x1 = torch.squeeze(x1, 1)
             x2 = torch.squeeze(x2, 1)
-            x1, x2, y = Variable(x1), Variable(x2), Variable(batch_y)
-            output = model(x1, x2)
+            x1, x2, y, x1_e, x2_e = Variable(x1), Variable(x2), Variable(batch_y), Variable(x1_e), Variable(x2_e)
+            output = model(x1, x2, x1_e, x2_e)
             loss = citerion(output, y)
             #print loss.data[0]
             optimizer.zero_grad()
@@ -61,11 +66,13 @@ if __name__ == '__main__':
             optimizer.step()
         if epoch%5 == 0:
             adjust_learning_rate(optimizer)
-            x1_x2 = torch.chunk(x_test_tensor, 2, 1)
+            x1_x2 = torch.chunk(x_test_tensor, 4, 1)
             x1 = torch.squeeze(x1_x2[0])
-            x2 = torch.squeeze(x1_x2[1])
-            x1, x2, y = Variable(x1), Variable(x2), Variable(y_test_tensor)
-            output = model(x1, x2)
+            x1_e = x1_x2[1]
+            x2 = torch.squeeze(x1_x2[2])
+            x2_e = x1_x2[3]
+            x1, x2, y, x1_e, x2_e = Variable(x1), Variable(x2), Variable(y_test_tensor), Variable(x1_e), Variable(x2_e)
+            output = model(x1, x2, x1_e, x2_e)
             y = torch.squeeze(y, 1)
             loss = citerion(output, y)
 
